@@ -121,11 +121,37 @@ class jenkins::slave (
   # customizations based on the OS family
   case $::osfamily {
     'Debian': {
-      $defaults_location = '/etc/default'
+          if versioncmp($::operatingsystemmajrelease, '15.10') > 0
+          or
+          versioncmp($::operatingsystemmajrelease, '8') > 0
+          {
+            $create_systemd_file = true
+            $defaults_location = '/etc/sysconfig'
+          }
+          else {
+            $create_systemd_file = false
+            $defaults_location = '/etc/default'
+          }
+
+          package { 'daemon':
+            ensure => present,
+            before => Service['jenkins-slave'],
+          }
 
       ensure_packages(['daemon'])
       Package['daemon'] -> Service['jenkins-slave']
     }
+        'RedHat': {
+          if versioncmp($::operatingsystemmajrelease, '7') > 0
+          {
+            $create_systemd_file = true
+            $defaults_location = '/etc/sysconfig'
+          }
+          else {
+            $create_systemd_file = false
+            $defaults_location = '/etc/default'
+          }
+        }
     'Darwin': {
       $defaults_location = $slave_home
     }
@@ -142,14 +168,26 @@ class jenkins::slave (
       $defaults_group = 'root'
       $manage_user_home = true
 
-      file { '/etc/init.d/jenkins-slave':
-        ensure => 'file',
-        mode   => '0755',
-        owner  => 'root',
-        group  => 'root',
-        source => "puppet:///modules/${module_name}/jenkins-slave.${::osfamily}",
-        notify => Service['jenkins-slave'],
+      if $create_systemd_file {
+        file { '/lib/systemd/system/jenkins-slave.service':
+          ensure  => file,
+          mode    => '0666',
+          owner   => 'root',
+          group   => 'root',
+          before  => Service['jenkins-slave'],
+          content => template("${module_name}/jenkins-slave.systemd.erb"),
+        }
+      } else {
+        file { '/etc/init.d/jenkins-slave':
+          ensure => file,
+          mode   => '0755',
+          owner  => 'root',
+          group  => 'root',
+          source => "puppet:///modules/${module_name}/jenkins-slave.${::osfamily}",
+          notify => Service['jenkins-slave'],
+        }
       }
+
     }
     'Darwin': {
       $fetch_command    = "curl -O ${client_url}/${client_jar}"
@@ -227,6 +265,12 @@ class jenkins::slave (
       cwd     => $slave_home,
       #refreshonly  => true,
     ## needs to be fixed if you create another version..
+    }
+    file { "${slave_home}/${client_jar}":
+      mode    => '0755',
+      owner   => $slave_user,
+      group   => $slave_user,
+      require => Exec['get_swarm_client']
     }
   }
 
