@@ -1,18 +1,17 @@
 [Unit]
 Description=Jenkins Slave
-After=network.target remote-fs.target nss-lookup.target
+Requires=network.target
+After=multi-user.target
 
 [Service]
-Type=forking
+Type=simple
 WorkingDirectory=<%= @slave_home %>
 EnvironmentFile=-/etc/sysconfig/jenkins-slave
-ExecStartPre=/bin/mkdir -p /var/run/${NAME}
-ExecStartPre=/bin/chown <%= @slave_user %>:<%= @slave_user %> /var/run/${NAME}
-ExecStartPre=/bin/mkdir -p /var/log/${NAME}
-ExecStartPre=/bin/chown <%= @slave_user %>:<%= @slave_user %> /var/log/${NAME}
-
-ExecStart=/sbin/start-stop-daemon --start --chuid <%= @slave_user %>:<%= @slave_user %> --pidfile ${PIDFILE} --umask 007 --exec ${JAVA} -- -jar ${JENKINS_SLAVE_JAR} ${JENKINS_SLAVE_ARGS}
-ExecReload=/bin/kill -USR2 $MAINPID
+ExecStart=/usr/bin/java -jar <%= @slave_home %>/<%= @client_jar %> -executors <%= @processorcount %> -master <%= @masterurl %> -fsroot <%= @slave_home %> -mode <%= @slave_mode %>
+Restart=always
+RestartSec=60
+StartLimitInterval=0
+User=deploy
 
 [Install]
 WantedBy=multi-user.target
