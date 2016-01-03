@@ -168,6 +168,16 @@ class jenkins::slave (
       $defaults_group = 'root'
       $manage_user_home = true
 
+      file { '/var/run/jenkins-slave':
+        ensure => 'directory',
+        owner  => $slave_user,
+      }
+
+      file { '/var/log/jenkins-slave':
+        ensure => 'directory',
+        owner  => $slave_user,
+      }
+
       if $create_systemd_file {
         file { '/lib/systemd/system/jenkins-slave.service':
           ensure  => file,
@@ -176,6 +186,10 @@ class jenkins::slave (
           group   => 'root',
           before  => Service['jenkins-slave'],
           content => template("${module_name}/jenkins-slave.systemd.erb"),
+          require => [
+            File['/var/log/jenkins-slave'],
+            File['/var/run/jenkins-slave'],
+          ],
         }
       } else {
         file { '/etc/init.d/jenkins-slave':
@@ -187,7 +201,6 @@ class jenkins::slave (
           notify => Service['jenkins-slave'],
         }
       }
-
     }
     'Darwin': {
       $fetch_command    = "curl -O ${client_url}/${client_jar}"
